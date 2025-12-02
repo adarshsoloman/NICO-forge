@@ -1,0 +1,27 @@
+# Core dependencies
+PyPDF2==3.0.1
+python-docx==1.1.0
+pyyaml==6.0.1
+python-dotenv==1.0.0
+
+# Translation
+googletrans==4.0.0-rc1
+
+# Progress and CLI
+tqdm==4.66.1
+colorama==0.4.6
+
+# Async HTTP for translation (OpenRouter)
+aiohttp==3.9.1
+aiofiles==23.2.1
+
+# Retry logic
+tenacity==8.2.3
+
+# Text processing
+regex==2023.12.25
+
+# Optional: Development tools
+# pytest==7.4.3
+# black==23.12.1
+# pylint==3.0.3

@@ -1,0 +1,64 @@
+# NICO-Forge Configuration File
+# All values can be overridden by environment variables
+
+pipeline:
+  chunk_size: 60  # Words per chunk
+  batch_size: 5  # Chunks per API call
+  concurrency: 2  # Parallel workers
+  flush_every: 5  # Save to disk every N translations
+
+translation:
+  adapter: "openrouter"  # Translator to use
+  model: "meta-llama/llama-3.3-70b-instruct:free"  # Default model
+  retries: 3
+  timeout: 30  # seconds
+  request_delay: 5  # seconds between each request (for free tier rate limits)
+  backoff:
+    base: 2  # seconds
+    multiplier: 2
+    jitter: 0.2
+    max_wait: 60  # seconds
+
+extraction:
+  max_file_size_mb: 100  # Files larger than this use streaming
+  supported_formats:
+    - .pdf
+    - .docx
+    - .txt
+
+cleaning:
+  remove_urls: true
+  remove_emails: true
+  remove_references: true
+  normalize_whitespace: true
+
+deduplication:
+  enabled: true
+  fuzzy_matching: false  # Set to true for approximate deduplication
+
+qa:
+  sample_rate: 0.01  # 1% of translations
+  min_samples: 50
+  devanagari_threshold: 0.7  # Required % of Devanagari characters
+  max_length_ratio: 2.0
+  min_length_ratio: 0.5
+
+cost:
+  currency: "INR"
+  abort_threshold: null  # Set a number (e.g. 1000) to abort if cost exceeds ₹1000
+  token_multiplier: 1.5  # Words to tokens estimation
+
+outputs:
+  base_dir: "./outputs"
+  raw_text: "raw_text.txt"
+  cleaned_text: "cleaned_text.txt"
+  chunks_manifest: "chunks_manifest.json"
+  dataset_csv: "en_hi_dataset.csv"
+  dataset_json: "en_hi_dataset.json"
+  metadata: "metadata.json"
+  
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  console_level: "INFO"
+  file_level: "DEBUG"
+  log_dir: "./outputs/logs"

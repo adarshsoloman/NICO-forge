@@ -1,0 +1,295 @@
+# NICO-Forge 🔥
+
+**English–Hindi Bilingual Dataset Generation Pipeline**
+
+NICO-Forge is a modular, production-ready pipeline that converts raw documents (PDF/DOCX/TXT) into high-quality bilingual English–Hindi datasets for machine learning and NLP applications.
+
+## Features
+
+- 📄 **Multi-format extraction**: PDF, DOCX, TXT with streaming support for large files
+- 🧹 **Intelligent cleaning**: Removes URLs, emails, references, unicode artifacts
+- ✂️ **Smart chunking**: Fixed-size segments with SHA256-based deduplication
+- 🌐 **Pluggable translation**: Adapter pattern supporting multiple translation APIs
+- 🔄 **Resume capability**: Crash-tolerant with incremental state saving
+- ✅ **Quality assurance**: Devanagari validation and automated QA sampling
+- 💰 **Cost controls**: Pre-flight estimation and configurable spending guardrails
+- 📊 **Rich metadata**: Full provenance tracking for reproducibility
+- ⚡ **Async processing**: Concurrent translation with exponential backoff retry
+
+## Quick Start
+
+### 1. Installation
+
+```bash
+# Clone or navigate to project directory
+cd NICO-forge
+
+# Create virtual environment with uv
+uv venv
+.venv\Scripts\activate  # Windows
+# source .venv/bin/activate  # Linux/Mac
+
+# Install dependencies
+uv pip install -r requirements.txt
+```
+
+### 2. Configuration
+
+Copy the environment template and add your API key:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and add your OpenRouter API key:
+
+```
+OPENROUTER_API_KEY=your_key_here
+```
+
+### 3. Run Pipeline
+
+```bash
+python main.py path/to/your/documents
+```
+
+Or point to a specific file:
+
+```bash
+python main.py document.pdf another.docx
+```
+
+### 4. Check Outputs
+
+Results are saved to `outputs/`:
+
+```
+outputs/
+├── en_hi_dataset.csv       # CSV dataset
+├── en_hi_dataset.json      # JSON dataset with metadata
+├── metadata.json           # Pipeline statistics
+├── chunks_manifest.json    # Chunking details
+└── failed/                 # Failed translations (if any)
+```
+
+## Configuration
+
+Edit `config.yaml` to customize:
+
+```yaml
+pipeline:
+  chunk_size: 60          # Words per chunk
+  batch_size: 20          # Chunks per API call
+  concurrency: 10         # Parallel workers
+
+translation:
+  model: "google/gemini-2.0-flash-thinking-exp:free"
+  retries: 3
+  timeout: 30
+
+cost:
+  abort_threshold: 1000   # Abort if cost exceeds ₹1000
+  
+qa:
+  sample_rate: 0.01       # QA 1% of translations
+  devanagari_threshold: 0.7  # Min 70% Devanagari chars
+```
+
+## Advanced Usage
+
+### Resume After Interruption
+
+If the pipeline crashes or is interrupted, simply run it again:
+
+```bash
+python main.py path/to/documents
+```
+
+State is automatically saved. The pipeline will skip completed stages.
+
+### Force Restart
+
+To clear state and restart from beginning:
+
+```bash
+python main.py --force-restart path/to/documents
+```
+
+### Custom Config
+
+Use a different config file:
+
+```bash
+python main.py --config my-config.yaml path/to/documents
+```
+
+## Architecture
+
+```
+NICO-forge/
+├── config.yaml              # Configuration
+├── main.py                  # Main orchestrator
+├── modules/
+│   ├── extraction.py        # PDF/DOCX/TXT extraction
+│   ├── cleaner.py          # Text cleaning
+│   ├── chunker.py          # Chunking + deduplication
+│   ├── pipeline.py         # Translation pipeline
+│   └── translators/
+│       ├── base.py         # Abstract translator
+│       └── openrouter.py   # OpenRouter adapter
+└── utils/
+    ├── config_loader.py    # Config management
+    ├── logger.py           # Structured logging
+    ├── progress.py         # Progress bars
+    ├── state_manager.py    # Resume capability
+    └── exceptions.py       # Custom exceptions
+```
+
+## Pipeline Stages
+
+1. **Extraction**: Extract text from PDFs, DOCX, TXT files
+2. **Cleaning**: Remove noise, normalize whitespace
+3. **Chunking**: Split into 60-word segments with deduplication
+4. **Cost Estimation**: Calculate and verify translation costs
+5. **Translation**: Async batch translation with retry logic
+6. **QA Sampling**: Validate 1% of translations for quality
+7. **Export**: Generate CSV + JSON datasets
+
+## Translation Adapters
+
+NICO-Forge uses a pluggable adapter pattern. Currently supported:
+
+- **OpenRouter** (default): Access to multiple LLM providers
+
+### Adding Custom Translators
+
+Extend `BaseTranslator` in `modules/translators/base.py`:
+
+```python
+class MyTranslator(BaseTranslator):
+    async def translate_batch(self, chunks: List[str]) -> List[str]:
+        # Your implementation
+        pass
+    
+    def get_model_info(self) -> dict:
+        return {"adapter": "my-translator", "model": "..."}
+    
+    def estimate_cost(self, word_count: int) -> float:
+        # Cost calculation
+        return 0.0
+```
+
+## Quality Assurance
+
+The pipeline automatically validates translations:
+
+- ✅ **Devanagari check**: Ensures ≥70% Devanagari characters
+- ✅ **Length ratio**: Flags suspicious length mismatches
+- ✅ **Empty response**: Catches blank translations
+- ✅ **Error detection**: Identifies error markers
+
+Failed QA samples are saved to `outputs/failed/translation_qc_failed.json`.
+
+## Cost Controls
+
+### Pre-flight Estimation
+
+Before translation, the pipeline estimates costs:
+
+```
+Unique chunks to translate: 4,355
+Total words: 246,780
+Estimated cost: ₹ 487.50
+```
+
+### Guardrails
+
+Set `abort_threshold` in config to prevent runaway costs:
+
+```yaml
+cost:
+  abort_threshold: 1000  # Abort if > ₹1000
+```
+
+## Logging
+
+Logs are saved to `outputs/logs/`:
+
+- **Console**: INFO level (progress, key events)
+- **File**: DEBUG level (everything)
+
+## Troubleshooting
+
+### API Key Errors
+
+```
+APIKeyMissingError: OpenRouter API key not provided
+```
+
+**Solution**: Set `OPENROUTER_API_KEY` in `.env` file.
+
+### Rate Limit Errors
+
+The pipeline automatically retries with exponential backoff.
+
+To reduce rate limits:
+- Decrease `concurrency` in config
+- Decrease `batch_size`
+
+### Empty Translations
+
+Check `outputs/failed/translation_failed.json` for error details.
+
+### QA Failures
+
+High QA failure rate (>2%) may indicate:
+- Wrong model selected
+- Poor source text quality
+- API issues
+
+Check `outputs/failed/translation_qc_failed.json` for specifics.
+
+## Development
+
+### Project Structure
+
+```
+├── .env                    # API keys (gitignored)
+├── .env.example            # Template
+├── config.yaml             # Configuration
+├── requirements.txt        # Dependencies
+├── main.py                 # Entry point
+├── modules/                # Core pipeline modules
+├── utils/                  # Utilities
+└── outputs/                # Generated files (gitignored)
+```
+
+### Dependencies
+
+- `PyPDF2`: PDF extraction
+- `python-docx`: DOCX extraction
+- `aiohttp`: Async HTTP for translation
+- `tenacity`: Retry logic
+- `tqdm`: Progress bars
+- `pyyaml`: Config parsing
+
+## Performance
+
+Typical throughput (with free tier models):
+
+- **Extraction**: ~50 pages/sec
+- **Cleaning**: ~10,000 lines/sec
+- **Chunking**: ~100,000 words/sec
+- **Translation**: ~20-50 chunks/sec (depends on API, concurrency)
+
+## License
+
+This project is provided as-is for research and development purposes.
+
+## Support
+
+For issues, questions, or contributions, please refer to your project repository or contact the development team.
+
+---
+
+**Built with ❤️ for bilingual NLP research**

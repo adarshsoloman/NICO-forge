@@ -1,0 +1,405 @@
+product_requirement.txt
+Project: English–Hindi Dataset Generation Pipeline (Codename: NICO-Forge)
+Version: 1.0
+Status: Final PRD
+1. Overview
+
+NICO-Forge is a modular pipeline that converts raw documents (PDF/DOCX/TXT) into a bilingual English–Hindi dataset.
+The system extracts text, cleans it, chunks it into 60-word segments, translates the chunks using a pluggable translation interface, performs QA, deduplication, and exports a final dataset (CSV + JSON) with rich metadata.
+
+The architecture prioritizes modularity, transparency, accuracy, cost control, and flexibility.
+
+2. Core Scope
+
+The pipeline will:
+
+Extract text from PDFs and common document formats.
+
+Clean the extracted text into normalized plain text.
+
+Chunk the cleaned text into 60-word English segments.
+
+Translate these chunks to Hindi using a translator adapter (default: OpenRouter).
+
+Produce CSV & JSON datasets containing English/Hindi pairs.
+
+Run using a single orchestrator script (main.py).
+
+Include progress bars, structured logging, error handling, metadata, and cost estimation.
+
+3. System Components
+3.1 extraction.py — Text Extraction Module
+
+Purpose: Extract text from PDF/DOCX/TXT files into raw_text.txt.
+
+Requirements:
+
+Display progress bar (files/pages) and a 100% completion message.
+
+Skip malformed or unsupported files with warnings.
+
+Save results even if some sources fail.
+
+Expected Exceptions:
+
+FileNotFoundError
+
+UnsupportedFileTypeError
+
+PDFReadError (corrupted PDFs)
+
+PermissionError
+
+EncodingError
+
+On unrecoverable issues, log and continue where possible.
+
+Outputs:
+
+raw_text.txt,
+
+extraction_failed.json for problematic files.
+
+3.2 cleaner.py — Text Cleaning Module
+
+Purpose: Clean extracted text into consistent, normalized content.
+
+Requirements:
+
+Display line-based progress bar → 100% success message.
+
+Remove URLs, emails, references, unicode garbage, irregular spacing.
+
+Produce editor-friendly plain text.
+
+Expected Exceptions:
+
+EmptyInputError
+
+RegexError
+
+EncodingError
+
+MemoryError (fallback to streaming)
+
+Outputs:
+
+cleaned_text.txt
+
+clean_preview.txt preview
+
+3.3 chunker.py — Chunking Module
+
+Purpose: Break cleaned text into deterministic ~60-word segments.
+
+Requirements:
+
+Show word-level progress bar → 100% confirmation.
+
+Create chunk metadata: id, start_word_idx, end_word_idx, source.
+
+Save chunks_manifest.json.
+
+Expected Exceptions:
+
+EmptyTextError
+
+InvalidChunkSizeError
+
+TokenizationError
+
+IOErrors writing manifest
+
+Outputs:
+
+Chunks list
+
+chunks_manifest.json
+
+3.4 pipeline.py — Translation Pipeline
+
+Purpose: Translate English chunks → Hindi using pluggable adapters.
+
+Requirements:
+
+Batch-level progress bar (with ETA).
+
+Automatic retries with backoff.
+
+Continuous flushing to disk (NDJSON/CSV every 5 translations).
+
+QC sampling after translation (1% or min 50 chunks).
+
+Dead-letter queue for permanently failed chunks.
+
+Expected Exceptions:
+
+APIKeyMissingError
+
+AuthenticationError
+
+RateLimitError (429)
+
+APIRequestError (5xx)
+
+TimeoutError
+
+ParseError
+
+EmptyResponseError
+
+TranslationQualityError
+
+QuotaExceededError
+
+Outputs:
+
+en_hi_dataset.csv
+
+en_hi_dataset.json
+
+translation_failed.json
+
+Raw API dumps for debug
+
+3.5 main.py — Orchestrator
+
+Purpose: Run all steps sequentially:
+
+extraction.py → cleaner.py → chunker.py → pipeline.py
+
+Responsibilities:
+
+Load config
+
+Kick off each module
+
+Show module-level progress
+
+Handle resume scenarios
+
+Save final metadata
+
+Enforce cost guardrails
+
+Provide summary report
+
+Outputs:
+
+metadata.json
+
+Dataset export files
+
+Logs
+
+4. Enhancements & Functional Additions
+4.1 Pluggable Translator Interface
+
+Translator must be abstracted using an adapter pattern.
+
+Default adapter: OpenRouterTranslator.
+
+Additional placeholders for future:
+
+OpenAITranslator
+
+GoogleTranslator
+
+LocalLLMTranslator
+
+Minimum API for each adapter:
+
+translate_batch(chunks)
+
+get_model_info()
+
+Rationale: Avoid lock-in, handle changes, allow A/B tests.
+
+4.2 Central Config File (YAML/JSON) + Env Overrides
+
+A single config file config.yaml must define:
+
+chunk_size
+
+batch_size
+
+concurrency
+
+retries
+
+backoff (base, multiplier, jitter)
+
+flush_every
+
+API endpoints
+
+model names
+
+log paths
+
+output paths
+
+QC thresholds
+
+cost guardrails
+
+Environment variables override config values (API keys, endpoints, flags).
+
+Rationale: No hardcoding, flexible deployment.
+
+4.3 Default Operational Values (Recommended)
+
+chunk_size = 60
+
+batch_size = 20 (chunks per API call)
+
+concurrency = 10 workers
+
+retries = 3
+
+base_backoff = 2s
+
+jitter = 0.2
+
+flush_every = 5
+
+Rationale: Balanced performance & safety.
+
+4.4 Deduplication & Normalization
+
+Before translation:
+
+Exact-match dedupe
+
+Optional fuzzy-match dedupe
+
+Map: duplicate_chunk_id → canonical_chunk_id
+
+Only canonical chunks are translated
+
+Duplicates inherit canonical translations after pipeline completion
+
+Rationale: Save tokens, reduce noise.
+
+4.5 QA & Sampling
+
+After translation:
+
+Sample 1% or min 50 chunks
+
+Check:
+
+Hindi length ratio
+
+English residue
+
+Bad unicode
+
+Empty output
+
+Flag problematic translations → translation_qc_failed.json.
+
+Rationale: Detect model-wide issues early.
+
+4.6 Data Provenance & Metadata
+
+Each chunk’s record must include:
+
+chunk_id
+
+source file
+
+source file path
+
+source checksum
+
+start_word_idx
+
+end_word_idx
+
+timestamp
+
+translator adapter name
+
+model/version
+
+prompt hash
+
+worker_id
+
+cost_estimate
+
+metadata.json must include pipeline-wide info.
+
+Rationale: Full traceability.
+
+4.7 Cost Estimation & Guardrails
+
+Before pipeline execution:
+
+Estimate tokens = word_count × 1.5
+
+Add prompt overhead
+
+Estimate monetary cost
+
+Print estimate
+
+Support:
+--abort-if-cost>₹VALUE
+
+Pipeline halts if threshold exceeded.
+
+Rationale: Prevent runaway spend.
+
+5. Execution Flow
+
+Load config
+
+Run extraction.py → generate raw text
+
+Run cleaner.py → generate cleaned text
+
+Run chunker.py → generate chunks + dedupe pass
+
+Preflight cost estimation
+
+Run pipeline.py → translation + retries + flush
+
+Run QA sampling
+
+Expand deduplicated chunks
+
+Export CSV and JSON
+
+Write metadata.json
+
+Print final summary
+
+6. Success Criteria
+
+End-to-end run completes without fatal errors
+
+Translation adapter easily swappable
+
+Dataset reproducible
+
+QC anomaly rate < 2%
+
+Deduplication working (token cost reduced)
+
+Logs and metadata comprehensive
+
+Cost guardrail protects against unintended large bills
+
+7. Out-of-Scope
+
+Full UI / GUI
+
+Real-time translation API
+
+Distributed multi-machine orchestration
+
+Deep linguistic validation
+
+Local OCR (for scanned PDFs)
