@@ -72,6 +72,118 @@ outputs/
 └── failed/                 # Failed translations (if any)
 ```
 
+## Data Cleaning & Preparation
+
+### Why Clean Your Dataset?
+
+Raw datasets extracted from PDFs often contain artifacts that can negatively impact LLM training:
+- ❌ Newline characters (`\n`, `\r`, `\t`) embedded in text
+- ❌ Repetitive OCR errors (e.g., "UNDERSTUNDERSTUNDERST")
+- ❌ PDF extraction artifacts (page numbers, reprint notices, section numbers)
+- ❌ Excessive whitespace and formatting issues
+
+The cleaning pipeline ensures your training data is pristine and ready for model fine-tuning.
+
+### Clean Datasets
+
+Use `clean_dataset.py` to prepare your datasets for LLM training:
+
+```bash
+# Clean JSON dataset
+python clean_dataset.py --input outputs/en_hi_dataset.json --output outputs/cleaned_dataset.json
+
+# Clean CSV dataset
+python clean_dataset.py --input outputs/en_hi_dataset.csv --output outputs/cleaned_dataset.csv
+```
+
+**What gets cleaned:**
+- ✅ Removes all newline, tab, and carriage return characters
+- ✅ Fixes repetitive OCR patterns using regex detection
+- ✅ Removes PDF artifacts (page numbers, "Reprint 2025-26" text)
+- ✅ Normalizes whitespace (multiple spaces → single space)
+- ✅ Filters out very short entries (< 10 characters)
+- ✅ Preserves metadata and structure
+
+**Output:**
+```
+============================================================
+CLEANING STATISTICS
+============================================================
+Total entries processed: 110
+Cleaned entries: 110
+Empty/short entries removed: 0
+Average English text length: 245.3 chars
+Average Hindi text length: 228.7 chars
+============================================================
+```
+
+### Merge Multiple Datasets
+
+After processing multiple PDF pairs, combine them into a single dataset using `merge_datasets.py`:
+
+```bash
+# Merge specific files
+python merge_datasets.py --inputs cleaned_1.json cleaned_2.json --output final_dataset.json
+
+# Merge all cleaned files using wildcards
+python merge_datasets.py --inputs outputs/cleaned_*.json --output outputs/merged_dataset.json
+
+# Merge CSV files
+python merge_datasets.py --inputs outputs/cleaned_*.csv --output outputs/merged_dataset.csv
+
+# Keep original chunk_ids (no renumbering)
+python merge_datasets.py --inputs file1.json file2.json --output merged.json --no-renumber
+```
+
+**Features:**
+- ✅ Supports both JSON and CSV formats
+- ✅ Automatic sequential renumbering of chunk_ids
+- ✅ Wildcard support for batch merging (`*.json`)
+- ✅ Detailed statistics per file and total counts
+- ✅ Preserves all metadata from source files
+
+**Output:**
+```
+============================================================
+MERGE STATISTICS
+============================================================
+Output format: JSON
+Files processed: 3
+Total entries in merged dataset: 342
+
+Entries per file:
+  - cleaned_dataset_1.json: 110 entries
+  - cleaned_dataset_2.json: 125 entries
+  - cleaned_dataset_3.json: 107 entries
+============================================================
+```
+
+### Complete Workflow Example
+
+Process multiple books and create a final training dataset:
+
+```bash
+# Step 1: Extract parallel text from multiple PDF pairs
+python main.py --english book1_en.pdf --hindi book1_hi.pdf
+# Rename outputs: mv outputs/en_hi_dataset.json outputs/raw_book1.json
+
+python main.py --english book2_en.pdf --hindi book2_hi.pdf
+# Rename outputs: mv outputs/en_hi_dataset.json outputs/raw_book2.json
+
+python main.py --english book3_en.pdf --hindi book3_hi.pdf
+# Rename outputs: mv outputs/en_hi_dataset.json outputs/raw_book3.json
+
+# Step 2: Clean each dataset
+python clean_dataset.py --input outputs/raw_book1.json --output outputs/cleaned_book1.json
+python clean_dataset.py --input outputs/raw_book2.json --output outputs/cleaned_book2.json
+python clean_dataset.py --input outputs/raw_book3.json --output outputs/cleaned_book3.json
+
+# Step 3: Merge all cleaned datasets
+python merge_datasets.py --inputs outputs/cleaned_book*.json --output outputs/FINAL_TRAINING_DATASET.json
+```
+
+Now your `FINAL_TRAINING_DATASET.json` is ready for LLM training! 🚀
+
 ## Configuration
 
 Edit `config.yaml` to customize:
@@ -129,6 +241,8 @@ python main.py --config my-config.yaml path/to/documents
 NICO-forge/
 ├── config.yaml              # Configuration
 ├── main.py                  # Main orchestrator
+├── clean_dataset.py         # Dataset cleaning utility
+├── merge_datasets.py        # Dataset merging utility
 ├── modules/
 │   ├── extraction.py        # PDF/DOCX/TXT extraction
 │   ├── cleaner.py          # Text cleaning
@@ -259,6 +373,8 @@ Check `outputs/failed/translation_qc_failed.json` for specifics.
 ├── config.yaml             # Configuration
 ├── requirements.txt        # Dependencies
 ├── main.py                 # Entry point
+├── clean_dataset.py        # Data cleaning utility
+├── merge_datasets.py       # Dataset merging utility
 ├── modules/                # Core pipeline modules
 ├── utils/                  # Utilities
 └── outputs/                # Generated files (gitignored)
