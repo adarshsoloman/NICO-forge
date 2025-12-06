@@ -24,13 +24,15 @@ NICO-Forge is a modular, production-ready pipeline that converts raw documents (
 # Clone or navigate to project directory
 cd NICO-forge
 
-# Create virtual environment with uv
-uv venv
-.venv\Scripts\activate  # Windows
-# source .venv/bin/activate  # Linux/Mac
+# Run the setup script (Linux/Mac)
+bash setup.sh
 
-# Install dependencies
-uv pip install -r requirements.txt
+# Or manual setup (Windows/Linux)
+# ... see legacy instructions if needed, but setup.sh is preferred for Linux.
+# For Windows:
+# uv venv
+# .venv\Scripts\activate
+# uv pip install -r requirements.txt
 ```
 
 ### 2. Configuration

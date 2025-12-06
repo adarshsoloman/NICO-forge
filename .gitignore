@@ -50,3 +50,7 @@ Thumbs.db
 test_data/
 *.pdf
 *.docx
+
+# Setup scripts
+!setup.sh
+
